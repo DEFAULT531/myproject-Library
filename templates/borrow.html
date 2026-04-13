@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>借阅管理 - 图书管理系统</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">图书管理系统</div>
+        <div class="nav-links">
+            <a href="{{ url_for('index') }}">首页</a>
+            <a href="{{ url_for('books') }}">图书管理</a>
+            <a href="{{ url_for('users') }}">用户管理</a>
+            <a href="{{ url_for('borrows') }}" class="active">借阅管理</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h1>借阅管理</h1>
+
+        <div class="toolbar">
+            <button class="btn btn-primary" onclick="showModal('borrow-modal')">借书</button>
+        </div>
+
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>图书</th>
+                    <th>借阅人</th>
+                    <th>借阅日期</th>
+                    <th>应还日期</th>
+                    <th>状态</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for borrow in borrows %}
+                <tr>
+                    <td>{{ borrow.id }}</td>
+                    <td>{{ borrow.book.title }}</td>
+                    <td>{{ borrow.user.name }}</td>
+                    <td>{{ borrow.borrow_date }}</td>
+                    <td>{{ borrow.return_date or '-' }}</td>
+                    <td>
+                        {% if borrow.status == '借阅中' %}
+                        <span class="badge warning">借阅中</span>
+                        {% else %}
+                        <span class="badge success">已归还</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if borrow.status == '借阅中' %}
+                        <a href="{{ url_for('return_book', id=borrow.id) }}" class="btn btn-sm" onclick="return confirm('确认归还？')">还书</a>
+                        {% endif %}
+                        <a href="{{ url_for('delete_borrow', id=borrow.id) }}" class="btn btn-sm btn-danger" onclick="return confirm('确定删除这条记录？')">删除</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 借书弹窗 -->
+    <div id="borrow-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="hideModal('borrow-modal')">&times;</span>
+            <h2>借书</h2>
+            <form action="{{ url_for('add_borrow') }}" method="POST">
+                <div class="form-group">
+                    <label>选择图书</label>
+                    <select name="book_id" id="borrow-book-select" required>
+                        <option value="">请选择图书</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>选择用户</label>
+                    <select name="user_id" id="borrow-user-select" required>
+                        <option value="">请选择用户</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>归还日期</label>
+                    <input type="date" name="return_date" required>
+                </div>
+                <button type="submit" class="btn btn-primary">确认借书</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        // 加载可借图书和用户
+        fetch('/api/books')
+            .then(res => res.json())
+            .then(books => {
+                const select = document.getElementById('borrow-book-select');
+                books.filter(b => b.stock > 0).forEach(book => {
+                    const option = document.createElement('option');
+                    option.value = book.id;
+                    option.textContent = `${book.title} (库存: ${book.stock})`;
+                    select.appendChild(option);
+                });
+            });
+
+        fetch('/api/users')
+            .then(res => res.json())
+            .then(users => {
+                const select = document.getElementById('borrow-user-select');
+                users.forEach(user => {
+                    const option = document.createElement('option');
+                    option.value = user.id;
+                    option.textContent = user.name;
+                    select.appendChild(option);
+                });
+            });
+    </script>
+</body>
+</html>

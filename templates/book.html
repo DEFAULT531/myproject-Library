@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图书管理 - 图书管理系统</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">图书管理系统</div>
+        <div class="nav-links">
+            <a href="{{ url_for('index') }}">首页</a>
+            <a href="{{ url_for('books') }}" class="active">图书管理</a>
+            <a href="{{ url_for('users') }}">用户管理</a>
+            <a href="{{ url_for('borrows') }}">借阅管理</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h1>图书管理</h1>
+
+        <div class="toolbar">
+            <button class="btn btn-primary" onclick="showModal('add-book-modal')">添加图书</button>
+        </div>
+
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>书名</th>
+                    <th>作者</th>
+                    <th>分类</th>
+                    <th>ISBN</th>
+                    <th>库存</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for book in books %}
+                <tr>
+                    <td>{{ book.id }}</td>
+                    <td>{{ book.title }}</td>
+                    <td>{{ book.author }}</td>
+                    <td>{{ book.category }}</td>
+                    <td>{{ book.isbn }}</td>
+                    <td>
+                        {% if book.stock > 0 %}
+                        <span class="badge success">{{ book.stock }}</span>
+                        {% else %}
+                        <span class="badge danger">已借完</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <button class="btn btn-sm" onclick="editBook({{ book.id }}, '{{ book.title }}', '{{ book.author }}', '{{ book.isbn }}', '{{ book.category }}', {{ book.stock }})">编辑</button>
+                        <a href="{{ url_for('delete_book', id=book.id) }}" class="btn btn-sm btn-danger" onclick="return confirm('确定删除这本书吗？')">删除</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 添加图书弹窗 -->
+    <div id="add-book-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="hideModal('add-book-modal')">&times;</span>
+            <h2>添加图书</h2>
+            <form action="{{ url_for('add_book') }}" method="POST">
+                <div class="form-group">
+                    <label>书名</label>
+                    <input type="text" name="title" required>
+                </div>
+                <div class="form-group">
+                    <label>作者</label>
+                    <input type="text" name="author" required>
+                </div>
+                <div class="form-group">
+                    <label>ISBN</label>
+                    <input type="text" name="isbn">
+                </div>
+                <div class="form-group">
+                    <label>分类</label>
+                    <input type="text" name="category">
+                </div>
+                <div class="form-group">
+                    <label>库存</label>
+                    <input type="number" name="stock" value="1" min="0">
+                </div>
+                <button type="submit" class="btn btn-primary">添加</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 编辑图书弹窗 -->
+    <div id="edit-book-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="hideModal('edit-book-modal')">&times;</span>
+            <h2>编辑图书</h2>
+            <form id="edit-book-form" action="" method="POST">
+                <div class="form-group">
+                    <label>书名</label>
+                    <input type="text" name="title" id="edit-title" required>
+                </div>
+                <div class="form-group">
+                    <label>作者</label>
+                    <input type="text" name="author" id="edit-author" required>
+                </div>
+                <div class="form-group">
+                    <label>ISBN</label>
+                    <input type="text" name="isbn" id="edit-isbn">
+                </div>
+                <div class="form-group">
+                    <label>分类</label>
+                    <input type="text" name="category" id="edit-category">
+                </div>
+                <div class="form-group">
+                    <label>库存</label>
+                    <input type="number" name="stock" id="edit-stock" min="0">
+                </div>
+                <button type="submit" class="btn btn-primary">保存</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

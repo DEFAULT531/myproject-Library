@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图书管理系统</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">图书管理系统</div>
+        <div class="nav-links">
+            <a href="{{ url_for('index') }}" class="active">首页</a>
+            <a href="{{ url_for('books') }}">图书管理</a>
+            <a href="{{ url_for('users') }}">用户管理</a>
+            <a href="{{ url_for('borrows') }}">借阅管理</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h1>欢迎使用图书管理系统</h1>
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number">{{ books|length }}</div>
+                <div class="stat-label">图书总数</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number">{{ books|selectattr('stock', '>', 0)|list|length }}</div>
+                <div class="stat-label">可借图书</div>
+            </div>
+        </div>
+
+        <h2>图书列表</h2>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>书名</th>
+                    <th>作者</th>
+                    <th>分类</th>
+                    <th>ISBN</th>
+                    <th>库存</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for book in books %}
+                <tr>
+                    <td>{{ book.id }}</td>
+                    <td>{{ book.title }}</td>
+                    <td>{{ book.author }}</td>
+                    <td>{{ book.category }}</td>
+                    <td>{{ book.isbn }}</td>
+                    <td>
+                        {% if book.stock > 0 %}
+                        <span class="badge success">{{ book.stock }}</span>
+                        {% else %}
+                        <span class="badge danger">已借完</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
