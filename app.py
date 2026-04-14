@@ -84,6 +84,9 @@ def add_book():
     category = request.form.get('category')
     stock = request.form.get('stock', type=int, default=1)
 
+    if not title or not author:
+        return redirect(url_for('books'))
+
     book = Book(title=title, author=author, isbn=isbn, category=category, stock=stock)
     db.session.add(book)
     db.session.commit()
@@ -93,8 +96,14 @@ def add_book():
 @app.route('/book/edit/<int:id>', methods=['POST'])
 def edit_book(id):
     book = Book.query.get_or_404(id)
-    book.title = request.form.get('title')
-    book.author = request.form.get('author')
+    title = request.form.get('title')
+    author = request.form.get('author')
+
+    if not title or not author:
+        return redirect(url_for('books'))
+
+    book.title = title
+    book.author = author
     book.isbn = request.form.get('isbn')
     book.category = request.form.get('category')
     book.stock = request.form.get('stock', type=int)

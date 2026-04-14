@@ -228,3 +228,7 @@ h2 {
     outline: none;
     border-color: #3498db;
 }
+
+.required {
+    color: #e74c3c;
+}
