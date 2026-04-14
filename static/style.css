@@ -39,6 +39,25 @@ body {
     background-color: #34495e;
 }
 
+.nav-user {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    color: white;
+}
+
+.nav-user a {
+    color: #bdc3c7;
+    text-decoration: none;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    transition: background-color 0.3s;
+}
+
+.nav-user a:hover {
+    background-color: #34495e;
+}
+
 .container {
     max-width: 1200px;
     margin: 2rem auto;

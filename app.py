@@ -1,5 +1,7 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify
+from flask import Flask, render_template, request, redirect, url_for, jsonify, flash
 from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 import pymysql
 
@@ -11,6 +13,11 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = 'library-secret-key'
 
 db = SQLAlchemy(app)
+
+# Flask-Login 配置
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
 
 
 # 数据库模型
@@ -46,6 +53,18 @@ class Borrow(db.Model):
     status = db.Column(db.String(20), default='借阅中')
 
 
+class Admin(UserMixin, db.Model):
+    __tablename__ = 'admins'
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(100), unique=True, nullable=False)
+    password_hash = db.Column(db.String(200), nullable=False)
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    return Admin.query.get(int(user_id))
+
+
 # 初始化数据库
 def init_db():
     # 创建数据库
@@ -60,10 +79,19 @@ def init_db():
     # 创建表
     with app.app_context():
         db.create_all()
+        # 创建默认管理员
+        if not Admin.query.filter_by(username='admin').first():
+            admin = Admin(
+                username='admin',
+                password_hash=generate_password_hash('admin123')
+            )
+            db.session.add(admin)
+            db.session.commit()
 
 
 # 首页 - 图书列表
 @app.route('/')
+@login_required
 def index():
     books = Book.query.all()
     return render_template('index.html', books=books)
@@ -71,12 +99,14 @@ def index():
 
 # 图书管理
 @app.route('/books')
+@login_required
 def books():
     books = Book.query.all()
     return render_template('book.html', books=books)
 
 
 @app.route('/book/add', methods=['POST'])
+@login_required
 def add_book():
     title = request.form.get('title')
     author = request.form.get('author')
@@ -94,6 +124,7 @@ def add_book():
 
 
 @app.route('/book/edit/<int:id>', methods=['POST'])
+@login_required
 def edit_book(id):
     book = Book.query.get_or_404(id)
     title = request.form.get('title')
@@ -112,6 +143,7 @@ def edit_book(id):
 
 
 @app.route('/book/delete/<int:id>')
+@login_required
 def delete_book(id):
     book = Book.query.get_or_404(id)
     db.session.delete(book)
@@ -121,12 +153,14 @@ def delete_book(id):
 
 # 用户管理
 @app.route('/users')
+@login_required
 def users():
     users = User.query.all()
     return render_template('user.html', users=users)
 
 
 @app.route('/user/add', methods=['POST'])
+@login_required
 def add_user():
     name = request.form.get('name')
     email = request.form.get('email')
@@ -139,6 +173,7 @@ def add_user():
 
 
 @app.route('/user/edit/<int:id>', methods=['POST'])
+@login_required
 def edit_user(id):
     user = User.query.get_or_404(id)
     user.name = request.form.get('name')
@@ -149,6 +184,7 @@ def edit_user(id):
 
 
 @app.route('/user/delete/<int:id>')
+@login_required
 def delete_user(id):
     user = User.query.get_or_404(id)
     db.session.delete(user)
@@ -158,12 +194,14 @@ def delete_user(id):
 
 # 借阅管理
 @app.route('/borrows')
+@login_required
 def borrows():
     borrows = Borrow.query.order_by(Borrow.borrow_date.desc()).all()
     return render_template('borrow.html', borrows=borrows)
 
 
 @app.route('/borrow/add', methods=['POST'])
+@login_required
 def add_borrow():
     book_id = request.form.get('book_id', type=int)
     user_id = request.form.get('user_id', type=int)
@@ -181,6 +219,7 @@ def add_borrow():
 
 
 @app.route('/borrow/return/<int:id>')
+@login_required
 def return_book(id):
     borrow = Borrow.query.get_or_404(id)
     if borrow.status == '借阅中':
@@ -193,6 +232,7 @@ def return_book(id):
 
 
 @app.route('/borrow/delete/<int:id>')
+@login_required
 def delete_borrow(id):
     borrow = Borrow.query.get_or_404(id)
     # 如果是借阅中状态，归还库存
@@ -221,6 +261,29 @@ def api_users():
     return jsonify([{
         'id': u.id, 'name': u.name, 'email': u.email, 'phone': u.phone
     } for u in users])
+
+
+# 登录
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        admin = Admin.query.filter_by(username=username).first()
+        if admin and check_password_hash(admin.password_hash, password):
+            login_user(admin)
+            return redirect(url_for('index'))
+        else:
+            return render_template('login.html', error='用户名或密码错误')
+    return render_template('login.html')
+
+
+# 登出
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
 
 
 if __name__ == '__main__':
