@@ -4,7 +4,6 @@ from flask_login import LoginManager, UserMixin, login_user, login_required, log
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 import pymysql
-
 app = Flask(__name__)
 
 # MySQL 配置 (密码: 123456)
@@ -29,6 +28,7 @@ class Book(db.Model):
     isbn = db.Column(db.String(20), unique=True)
     category = db.Column(db.String(50))
     stock = db.Column(db.Integer, default=1)
+    is_delete = db.Column(db.String(1), default='N')
 
     borrows = db.relationship('Borrow', backref='book', lazy=True)
 
@@ -39,6 +39,7 @@ class User(db.Model):
     name = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(100), unique=True)
     phone = db.Column(db.String(20))
+    is_delete = db.Column(db.String(1), default='N')
 
     borrows = db.relationship('Borrow', backref='user', lazy=True)
 
@@ -51,6 +52,7 @@ class Borrow(db.Model):
     borrow_date = db.Column(db.Date, default=datetime.now().date)
     return_date = db.Column(db.Date)
     status = db.Column(db.String(20), default='借阅中')
+    is_delete = db.Column(db.String(1), default='N')
 
 
 class Admin(UserMixin, db.Model):
@@ -58,6 +60,37 @@ class Admin(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(100), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
+
+
+# 组织管理
+class Organization(db.Model):
+    __tablename__ = 'organizations'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    code = db.Column(db.String(50), unique=True)
+    parent_id = db.Column(db.Integer, db.ForeignKey('organizations.id'))
+    description = db.Column(db.String(500))
+    status = db.Column(db.Integer, default=1)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    is_delete = db.Column(db.String(1), default='N')
+
+    children = db.relationship('Organization', backref=db.backref('parent', remote_side=[id]), lazy=True)
+
+
+# 菜单管理
+class Menu(db.Model):
+    __tablename__ = 'menus'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False)
+    icon = db.Column(db.String(50))
+    url = db.Column(db.String(200))
+    parent_id = db.Column(db.Integer, db.ForeignKey('menus.id'))
+    sort_order = db.Column(db.Integer, default=0)
+    status = db.Column(db.Integer, default=1)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    is_delete = db.Column(db.String(1), default='N')
+
+    children = db.relationship('Menu', backref=db.backref('parent', remote_side=[id]), lazy=True)
 
 
 @login_manager.user_loader
@@ -72,6 +105,37 @@ def init_db():
     try:
         with connection.cursor() as cursor:
             cursor.execute("CREATE DATABASE IF NOT EXISTS library")
+            cursor.execute("USE library")
+            # 为已存在的表添加/更新is_delete字段
+            cursor.execute("SHOW COLUMNS FROM books LIKE 'is_delete'")
+            if not cursor.fetchone():
+                cursor.execute("ALTER TABLE books ADD COLUMN is_delete VARCHAR(1) DEFAULT 'N'")
+            else:
+                cursor.execute("ALTER TABLE books MODIFY COLUMN is_delete VARCHAR(1) DEFAULT 'N'")
+
+            cursor.execute("SHOW COLUMNS FROM users LIKE 'is_delete'")
+            if not cursor.fetchone():
+                cursor.execute("ALTER TABLE users ADD COLUMN is_delete VARCHAR(1) DEFAULT 'N'")
+            else:
+                cursor.execute("ALTER TABLE users MODIFY COLUMN is_delete VARCHAR(1) DEFAULT 'N'")
+
+            cursor.execute("SHOW COLUMNS FROM borrows LIKE 'is_delete'")
+            if not cursor.fetchone():
+                cursor.execute("ALTER TABLE borrows ADD COLUMN is_delete VARCHAR(1) DEFAULT 'N'")
+            else:
+                cursor.execute("ALTER TABLE borrows MODIFY COLUMN is_delete VARCHAR(1) DEFAULT 'N'")
+
+            cursor.execute("SHOW COLUMNS FROM organizations LIKE 'is_delete'")
+            if not cursor.fetchone():
+                cursor.execute("ALTER TABLE organizations ADD COLUMN is_delete VARCHAR(1) DEFAULT 'N'")
+            else:
+                cursor.execute("ALTER TABLE organizations MODIFY COLUMN is_delete VARCHAR(1) DEFAULT 'N'")
+
+            cursor.execute("SHOW COLUMNS FROM menus LIKE 'is_delete'")
+            if not cursor.fetchone():
+                cursor.execute("ALTER TABLE menus ADD COLUMN is_delete VARCHAR(1) DEFAULT 'N'")
+            else:
+                cursor.execute("ALTER TABLE menus MODIFY COLUMN is_delete VARCHAR(1) DEFAULT 'N'")
         connection.commit()
     finally:
         connection.close()
@@ -87,13 +151,11 @@ def init_db():
             )
             db.session.add(admin)
             db.session.commit()
-
-
 # 首页 - 图书列表
 @app.route('/')
 @login_required
 def index():
-    books = Book.query.all()
+    books = Book.query.filter_by(is_delete='N').all()
     return render_template('index.html', books=books)
 
 
@@ -101,7 +163,7 @@ def index():
 @app.route('/books')
 @login_required
 def books():
-    books = Book.query.all()
+    books = Book.query.filter_by(is_delete='N').all()
     return render_template('book.html', books=books)
 
 
@@ -116,6 +178,16 @@ def add_book():
 
     if not title or not author:
         return redirect(url_for('books'))
+
+    # 唯一性校验：检查ID+书名+作者+分类+ISBN是否已存在
+    existing = Book.query.filter(
+        Book.is_delete == 'N',
+        Book.title == title,
+        Book.author == author,
+        Book.category == category
+    ).first()
+    if existing:
+        return render_template('book.html', books=Book.query.filter_by(is_delete='N').all(), error='书名+作者+分类组合已存在，不能重复')
 
     book = Book(title=title, author=author, isbn=isbn, category=category, stock=stock)
     db.session.add(book)
@@ -133,6 +205,17 @@ def edit_book(id):
     if not title or not author:
         return redirect(url_for('books'))
 
+    # 唯一性校验：检查书名+作者+分类+ISBN是否已存在（排除自身）
+    existing = Book.query.filter(
+        Book.id != id,
+        Book.is_delete == 'N',
+        Book.title == title,
+        Book.author == author,
+        Book.category == request.form.get('category')
+    ).first()
+    if existing:
+        return render_template('book.html', books=Book.query.filter_by(is_delete='N').all(), error='书名+作者+分类组合已存在，不能重复')
+
     book.title = title
     book.author = author
     book.isbn = request.form.get('isbn')
@@ -146,7 +229,7 @@ def edit_book(id):
 @login_required
 def delete_book(id):
     book = Book.query.get_or_404(id)
-    db.session.delete(book)
+    book.is_delete='Y'
     db.session.commit()
     return redirect(url_for('books'))
 
@@ -155,7 +238,7 @@ def delete_book(id):
 @app.route('/users')
 @login_required
 def users():
-    users = User.query.all()
+    users = User.query.filter_by(is_delete='N').all()
     return render_template('user.html', users=users)
 
 
@@ -187,7 +270,7 @@ def edit_user(id):
 @login_required
 def delete_user(id):
     user = User.query.get_or_404(id)
-    db.session.delete(user)
+    user.is_delete='Y'
     db.session.commit()
     return redirect(url_for('users'))
 
@@ -196,7 +279,7 @@ def delete_user(id):
 @app.route('/borrows')
 @login_required
 def borrows():
-    borrows = Borrow.query.order_by(Borrow.borrow_date.desc()).all()
+    borrows = Borrow.query.filter_by(is_delete='N').order_by(Borrow.borrow_date.desc()).all()
     return render_template('borrow.html', borrows=borrows)
 
 
@@ -240,7 +323,7 @@ def delete_borrow(id):
         book = Book.query.get(borrow.book_id)
         if book:
             book.stock += 1
-    db.session.delete(borrow)
+    borrow.is_delete='Y'
     db.session.commit()
     return redirect(url_for('borrows'))
 
@@ -248,7 +331,7 @@ def delete_borrow(id):
 # API 接口
 @app.route('/api/books')
 def api_books():
-    books = Book.query.all()
+    books = Book.query.filter_by(is_delete='N').all()
     return jsonify([{
         'id': b.id, 'title': b.title, 'author': b.author,
         'isbn': b.isbn, 'category': b.category, 'stock': b.stock
@@ -257,10 +340,104 @@ def api_books():
 
 @app.route('/api/users')
 def api_users():
-    users = User.query.all()
+    users = User.query.filter_by(is_delete='N').all()
     return jsonify([{
         'id': u.id, 'name': u.name, 'email': u.email, 'phone': u.phone
     } for u in users])
+
+
+# 组织管理
+@app.route('/organizations')
+@login_required
+def organizations():
+    orgs = Organization.query.filter_by(is_delete='N').all()
+    return render_template('organization.html', organizations=orgs)
+
+
+@app.route('/organization/add', methods=['POST'])
+@login_required
+def add_organization():
+    name = request.form.get('name')
+    code = request.form.get('code')
+    parent_id = request.form.get('parent_id', type=int)
+    description = request.form.get('description')
+
+    if not name or not code:
+        return redirect(url_for('organizations'))
+
+    org = Organization(name=name, code=code, parent_id=parent_id, description=description)
+    db.session.add(org)
+    db.session.commit()
+    return redirect(url_for('organizations'))
+
+
+@app.route('/organization/edit/<int:id>', methods=['POST'])
+@login_required
+def edit_organization(id):
+    org = Organization.query.get_or_404(id)
+    org.name = request.form.get('name')
+    org.code = request.form.get('code')
+    org.parent_id = request.form.get('parent_id', type=int)
+    org.description = request.form.get('description')
+    db.session.commit()
+    return redirect(url_for('organizations'))
+
+
+@app.route('/organization/delete/<int:id>')
+@login_required
+def delete_organization(id):
+    org = Organization.query.get_or_404(id)
+    org.is_delete='Y'
+    db.session.commit()
+    return redirect(url_for('organizations'))
+
+
+# 菜单管理
+@app.route('/menus')
+@login_required
+def menus():
+    menu_list = Menu.query.filter_by(is_delete='N').order_by(Menu.sort_order).all()
+    return render_template('menu.html', menus=menu_list)
+
+
+@app.route('/menu/add', methods=['POST'])
+@login_required
+def add_menu():
+    name = request.form.get('name')
+    icon = request.form.get('icon')
+    url = request.form.get('url')
+    parent_id = request.form.get('parent_id', type=int)
+    sort_order = request.form.get('sort_order', type=int, default=0)
+
+    if not name:
+        return redirect(url_for('menus'))
+
+    menu = Menu(name=name, icon=icon, url=url, parent_id=parent_id, sort_order=sort_order)
+    db.session.add(menu)
+    db.session.commit()
+    return redirect(url_for('menus'))
+
+
+@app.route('/menu/edit/<int:id>', methods=['POST'])
+@login_required
+def edit_menu(id):
+    menu = Menu.query.get_or_404(id)
+    menu.name = request.form.get('name')
+    menu.icon = request.form.get('icon')
+    menu.url = request.form.get('url')
+    menu.parent_id = request.form.get('parent_id', type=int)
+    menu.sort_order = request.form.get('sort_order', type=int, default=0)
+    db.session.commit()
+    return redirect(url_for('menus'))
+
+
+@app.route('/menu/delete/<int:id>')
+@login_required
+def delete_menu(id):
+    menu = Menu.query.get_or_404(id)
+    menu.is_delete='Y'
+    db.session.commit()
+    return redirect(url_for('menus'))
 
 
 # 登录

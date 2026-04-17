@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>菜单管理 - 图书管理系统</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="top-user">
+        <span>👤 欢迎, {{ current_user.username }}</span>
+        <a href="{{ url_for('logout') }}">登出</a>
+    </div>
+    <nav class="navbar">
+        <div class="nav-brand">图书管理系统</div>
+        <div class="nav-links">
+            <a href="{{ url_for('index') }}">首页</a>
+            <a href="{{ url_for('books') }}">图书管理</a>
+            <a href="{{ url_for('borrows') }}">借阅管理</a>
+            <div class="nav-group">
+                <a href="{{ url_for('organizations') }}">系统管理</a>
+                <a href="{{ url_for('organizations') }}">　├ 组织管理</a>
+                <a href="{{ url_for('menus') }}" class="active">　├ 菜单管理</a>
+                <a href="{{ url_for('users') }}">　└ 用户管理</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h1>菜单管理</h1>
+
+        <div class="sub-nav">
+            <a href="{{ url_for('organizations') }}">组织管理</a>
+            <a href="{{ url_for('menus') }}" class="active">菜单管理</a>
+        </div>
+
+        <div class="toolbar">
+            <button class="btn btn-primary" onclick="showModal('add-menu-modal')">添加菜单</button>
+        </div>
+
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>菜单名称</th>
+                    <th>图标</th>
+                    <th>路由地址</th>
+                    <th>上级菜单</th>
+                    <th>排序</th>
+                    <th>状态</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for menu in menus %}
+                <tr>
+                    <td>{{ menu.id }}</td>
+                    <td>{{ menu.name }}</td>
+                    <td>{{ menu.icon }}</td>
+                    <td>{{ menu.url }}</td>
+                    <td>{{ menu.parent.name if menu.parent else '-' }}</td>
+                    <td>{{ menu.sort_order }}</td>
+                    <td>
+                        {% if menu.status == 1 %}
+                        <span class="badge success">启用</span>
+                        {% else %}
+                        <span class="badge danger">禁用</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <button class="btn btn-sm" onclick="editMenu({{ menu.id }}, '{{ menu.name }}', '{{ menu.icon or '' }}', '{{ menu.url or '' }}', '{{ menu.parent_id or '' }}', {{ menu.sort_order }})">编辑</button>
+                        <a href="{{ url_for('delete_menu', id=menu.id) }}" class="btn btn-sm btn-danger" onclick="confirmDelete('{{ url_for('delete_menu', id=menu.id) }}'); return false;">删除</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 添加菜单弹窗 -->
+    <div id="add-menu-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="hideModal('add-menu-modal')">&times;</span>
+            <h2>添加菜单</h2>
+            <form action="{{ url_for('add_menu') }}" method="POST">
+                <div class="form-group">
+                    <label>菜单名称</label>
+                    <input type="text" name="name" required>
+                </div>
+                <div class="form-group">
+                    <label>图标</label>
+                    <input type="text" name="icon" placeholder="如: home, user, book">
+                </div>
+                <div class="form-group">
+                    <label>路由地址</label>
+                    <input type="text" name="url" placeholder="如: /books">
+                </div>
+                <div class="form-group">
+                    <label>上级菜单</label>
+                    <select name="parent_id">
+                        <option value="">无（顶级菜单）</option>
+                        {% for menu in menus %}
+                        <option value="{{ menu.id }}">{{ menu.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>排序</label>
+                    <input type="number" name="sort_order" value="0" min="0">
+                </div>
+                <button type="submit" class="btn btn-primary">添加</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 编辑菜单弹窗 -->
+    <div id="edit-menu-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="hideModal('edit-menu-modal')">&times;</span>
+            <h2>编辑菜单</h2>
+            <form id="edit-menu-form" action="" method="POST">
+                <div class="form-group">
+                    <label>菜单名称</label>
+                    <input type="text" name="name" id="edit-name" required>
+                </div>
+                <div class="form-group">
+                    <label>图标</label>
+                    <input type="text" name="icon" id="edit-icon">
+                </div>
+                <div class="form-group">
+                    <label>路由地址</label>
+                    <input type="text" name="url" id="edit-url">
+                </div>
+                <div class="form-group">
+                    <label>上级菜单</label>
+                    <select name="parent_id" id="edit-parent_id">
+                        <option value="">无（顶级菜单）</option>
+                        {% for menu in menus %}
+                        <option value="{{ menu.id }}">{{ menu.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>排序</label>
+                    <input type="number" name="sort_order" id="edit-sort_order" min="0">
+                </div>
+                <button type="submit" class="btn btn-primary">保存</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        function editMenu(id, name, icon, url, parent_id, sort_order) {
+            document.getElementById('edit-menu-form').action = '/menu/edit/' + id;
+            document.getElementById('edit-name').value = name;
+            document.getElementById('edit-icon').value = icon;
+            document.getElementById('edit-url').value = url;
+            document.getElementById('edit-parent_id').value = parent_id;
+            document.getElementById('edit-sort_order').value = sort_order;
+            showModal('edit-menu-modal');
+        }
+    </script>
+</body>
+</html>

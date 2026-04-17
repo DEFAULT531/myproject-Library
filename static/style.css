@@ -13,54 +13,103 @@ body {
 .navbar {
     background-color: #5d4037;
     color: white;
-    padding: 1rem 2rem;
+    padding: 1rem;
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    width: 200px;
+    height: 100vh;
+    position: fixed;
+    left: 0;
+    top: 0;
 }
 
 .nav-brand {
-    font-size: 1.5rem;
+    font-size: 1.3rem;
     font-weight: bold;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #6d4c41;
+    width: 100%;
+}
+
+.nav-links {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    gap: 0.25rem;
 }
 
 .nav-links a {
     color: white;
     text-decoration: none;
-    padding: 0.5rem 1rem;
-    margin: 0 0.25rem;
+    padding: 0.75rem 1rem;
     border-radius: 4px;
     transition: background-color 0.3s;
+    display: block;
 }
 
 .nav-links a:hover,
-.nav-links a.active {
+.nav-links a.active,
+.nav-links .nav-group > a:hover,
+.nav-links .nav-group > a.active {
     background-color: #6d4c41;
+}
+
+.nav-links .submenu {
+    display: block;
+}
+
+.nav-links .nav-group.active > a,
+.nav-links .submenu a.active {
+    background-color: #6d4c41;
+}
+
+.nav-links .submenu a {
+    font-size: 0.9rem;
+    padding: 0.5rem 1rem;
+    opacity: 0.9;
 }
 
 .nav-user {
+    display: none;
+}
+
+/* 顶部用户栏 */
+.top-user {
+    position: fixed;
+    top: 0;
+    right: 0;
+    padding: 1rem 1.5rem;
     display: flex;
     align-items: center;
     gap: 1rem;
-    color: white;
+    z-index: 100;
 }
 
-.nav-user a {
-    color: #d7ccc8;
+.top-user span {
+    color: #5d4037;
+    font-size: 0.9rem;
+}
+
+.top-user a {
+    color: #8d6e63;
     text-decoration: none;
-    padding: 0.25rem 0.5rem;
+    padding: 0.25rem 0.75rem;
     border-radius: 4px;
-    transition: background-color 0.3s;
+    transition: all 0.3s;
+    font-size: 0.85rem;
 }
 
-.nav-user a:hover {
-    background-color: #6d4c41;
+.top-user a:hover {
+    background-color: #5d4037;
+    color: white;
 }
 
 .container {
     max-width: 1200px;
-    margin: 2rem auto;
+    margin: 2rem auto 2rem 220px;
     padding: 0 1rem;
 }
 
@@ -234,7 +283,8 @@ h2 {
 }
 
 .form-group input,
-.form-group select {
+.form-group select,
+.form-group textarea {
     width: 100%;
     padding: 0.75rem;
     border: 1px solid #bcaaa4;
@@ -244,7 +294,8 @@ h2 {
 }
 
 .form-group input:focus,
-.form-group select:focus {
+.form-group select:focus,
+.form-group textarea:focus {
     outline: none;
     border-color: #8d6e63;
     box-shadow: 0 0 0 3px rgba(141, 110, 99, 0.2);
@@ -252,4 +303,48 @@ h2 {
 
 .required {
     color: #c62828;
+}
+
+/* 子导航样式 */
+.sub-nav {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 2px solid #d7ccc8;
+}
+
+.sub-nav a {
+    padding: 0.75rem 1.5rem;
+    color: #6d4c41;
+    text-decoration: none;
+    border-radius: 4px 4px 0 0;
+    transition: all 0.3s;
+}
+
+.sub-nav a:hover {
+    background-color: #efebe9;
+}
+
+.sub-nav a.active {
+    background-color: #5d4037;
+    color: white;
+}
+
+/* 提示消息样式 */
+.alert {
+    padding: 1rem;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+}
+
+.alert-error {
+    background-color: #ffebee;
+    color: #c62828;
+    border: 1px solid #ef9a9a;
+}
+
+.alert-success {
+    background-color: #e8f5e9;
+    color: #2e7d32;
+    border: 1px solid #a5d6a7;
 }
