@@ -100,3 +100,11 @@ function editUser(id, name, email, phone) {
     document.getElementById('edit-user-form').action = '/user/edit/' + id;
     showModal('edit-user-modal');
 }
+
+// 充值弹窗
+function showRechargeModal(userId, userName, balance) {
+    document.getElementById('recharge-user-name').textContent = userName;
+    document.getElementById('recharge-current-balance').textContent = balance;
+    document.getElementById('recharge-form').action = '/user/recharge/' + userId;
+    showModal('recharge-modal');
+}

@@ -1,8 +1,11 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify, flash
+from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, send_from_directory
+import os
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
+import os
+import time
 import pymysql
 app = Flask(__name__)
 
@@ -10,6 +13,11 @@ app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:123456@localhost:3306/library'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = 'library-secret-key'
+app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max
+
+# 确保上传目录存在
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 db = SQLAlchemy(app)
 
@@ -29,6 +37,7 @@ class Book(db.Model):
     category = db.Column(db.String(50))
     stock = db.Column(db.Integer, default=1)
     is_delete = db.Column(db.String(1), default='N')
+    attachment = db.Column(db.String(500))  # 附件路径
 
     borrows = db.relationship('Borrow', backref='book', lazy=True)
 
@@ -40,6 +49,7 @@ class User(db.Model):
     email = db.Column(db.String(100), unique=True)
     phone = db.Column(db.String(20))
     is_delete = db.Column(db.String(1), default='N')
+    balance = db.Column(db.Float, default=0)  # 充值余额
 
     borrows = db.relationship('Borrow', backref='user', lazy=True)
 
@@ -60,6 +70,7 @@ class Admin(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(100), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
+    balance = db.Column(db.Float, default=0)  # 模拟会员余额，用于演示
 
 
 # 组织管理
@@ -113,11 +124,21 @@ def init_db():
             else:
                 cursor.execute("ALTER TABLE books MODIFY COLUMN is_delete VARCHAR(1) DEFAULT 'N'")
 
+            # 添加attachment字段
+            cursor.execute("SHOW COLUMNS FROM books LIKE 'attachment'")
+            if not cursor.fetchone():
+                cursor.execute("ALTER TABLE books ADD COLUMN attachment VARCHAR(500)")
+
             cursor.execute("SHOW COLUMNS FROM users LIKE 'is_delete'")
             if not cursor.fetchone():
                 cursor.execute("ALTER TABLE users ADD COLUMN is_delete VARCHAR(1) DEFAULT 'N'")
             else:
                 cursor.execute("ALTER TABLE users MODIFY COLUMN is_delete VARCHAR(1) DEFAULT 'N'")
+
+            # 添加balance字段
+            cursor.execute("SHOW COLUMNS FROM users LIKE 'balance'")
+            if not cursor.fetchone():
+                cursor.execute("ALTER TABLE users ADD COLUMN balance FLOAT DEFAULT 0")
 
             cursor.execute("SHOW COLUMNS FROM borrows LIKE 'is_delete'")
             if not cursor.fetchone():
@@ -136,6 +157,11 @@ def init_db():
                 cursor.execute("ALTER TABLE menus ADD COLUMN is_delete VARCHAR(1) DEFAULT 'N'")
             else:
                 cursor.execute("ALTER TABLE menus MODIFY COLUMN is_delete VARCHAR(1) DEFAULT 'N'")
+
+            # 添加admins表的balance字段
+            cursor.execute("SHOW COLUMNS FROM admins LIKE 'balance'")
+            if not cursor.fetchone():
+                cursor.execute("ALTER TABLE admins ADD COLUMN balance FLOAT DEFAULT 0")
         connection.commit()
     finally:
         connection.close()
@@ -234,6 +260,40 @@ def delete_book(id):
     return redirect(url_for('books'))
 
 
+# 上传附件
+@app.route('/book/upload/<int:id>', methods=['POST'])
+@login_required
+def upload_attachment(id):
+    book = Book.query.get_or_404(id)
+    if 'file' not in request.files:
+        return redirect(url_for('books'))
+    file = request.files['file']
+    if file.filename == '':
+        return redirect(url_for('books'))
+
+    # 获取文件扩展名
+    ext = file.filename.rsplit('.', 1)[1].lower() if '.' in file.filename else ''
+    allowed_exts = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'pdf']
+    if ext not in allowed_exts:
+        return redirect(url_for('books'))
+
+    # 保存文件
+    filename = f"{id}_{int(time.time())}_{file.filename}"
+    file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+
+    # 更新数据库
+    book.attachment = filename
+    db.session.commit()
+    return redirect(url_for('books'))
+
+
+# 下载/预览附件
+@app.route('/uploads/<filename>')
+@login_required
+def download_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+
 # 用户管理
 @app.route('/users')
 @login_required
@@ -272,6 +332,18 @@ def delete_user(id):
     user = User.query.get_or_404(id)
     user.is_delete='Y'
     db.session.commit()
+    return redirect(url_for('users'))
+
+
+# 用户充值
+@app.route('/user/recharge/<int:id>', methods=['POST'])
+@login_required
+def recharge(id):
+    user = User.query.get_or_404(id)
+    amount = request.form.get('amount', type=float, default=0)
+    if amount > 0:
+        user.balance = (user.balance or 0) + amount
+        db.session.commit()
     return redirect(url_for('users'))
 
 
@@ -461,6 +533,24 @@ def login():
 def logout():
     logout_user()
     return redirect(url_for('login'))
+
+
+# 管理员充值（用于模拟会员）
+@app.route('/admin/recharge', methods=['POST'])
+@login_required
+def admin_recharge():
+    amount = request.form.get('amount', type=float, default=0)
+    if amount > 0:
+        current_user.balance = (current_user.balance or 0) + amount
+        db.session.commit()
+    return redirect(url_for('index'))
+
+
+# 传递会员状态给模板
+@app.context_processor
+def inject_user():
+    is_member = hasattr(current_user, 'balance') and (current_user.balance or 0) >= 500
+    return dict(is_member=is_member)
 
 
 if __name__ == '__main__':

@@ -8,7 +8,11 @@
 </head>
 <body>
     <div class="top-user">
+        {% if is_member %}
+        <span>👑 欢迎, {{ current_user.username }}</span>
+        {% else %}
         <span>👤 欢迎, {{ current_user.username }}</span>
+        {% endif %}
         <a href="{{ url_for('logout') }}">登出</a>
     </div>
     <nav class="navbar">
@@ -40,6 +44,8 @@
                     <th>姓名</th>
                     <th>邮箱</th>
                     <th>电话</th>
+                    <th>余额</th>
+                    <th>会员</th>
                     <th>操作</th>
                 </tr>
             </thead>
@@ -50,8 +56,17 @@
                     <td>{{ user.name }}</td>
                     <td>{{ user.email }}</td>
                     <td>{{ user.phone }}</td>
+                    <td>{{ user.balance or 0 }}元</td>
+                    <td>
+                        {% if (user.balance or 0) >= 500 %}
+                        <span class="badge success">👑 会员</span>
+                        {% else %}
+                        <span>-</span>
+                        {% endif %}
+                    </td>
                     <td>
                         <button class="btn btn-sm" onclick="editUser({{ user.id }}, '{{ user.name }}', '{{ user.email }}', '{{ user.phone }}')">编辑</button>
+                        <button class="btn btn-sm" onclick="showRechargeModal({{ user.id }}, '{{ user.name }}', {{ user.balance or 0 }})">充值</button>
                         <a href="{{ url_for('delete_user', id=user.id) }}" class="btn btn-sm btn-danger" onclick="confirmDelete('{{ url_for('delete_user', id=user.id) }}'); return false;">删除</a>
                     </td>
                 </tr>
@@ -102,6 +117,22 @@
                     <input type="text" name="phone" id="edit-phone">
                 </div>
                 <button type="submit" class="btn btn-primary">保存</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 充值弹窗 -->
+    <div id="recharge-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="hideModal('recharge-modal')">&times;</span>
+            <h2>用户充值 - <span id="recharge-user-name"></span></h2>
+            <p style="margin-bottom: 1rem;">当前余额: <span id="recharge-current-balance"></span>元</p>
+            <form id="recharge-form" action="" method="POST">
+                <div class="form-group">
+                    <label>充值金额</label>
+                    <input type="number" name="amount" id="recharge-amount" min="0" step="0.01" required>
+                </div>
+                <button type="submit" class="btn btn-primary">确认充值</button>
             </form>
         </div>
     </div>

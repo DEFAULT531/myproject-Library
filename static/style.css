@@ -236,6 +236,15 @@ h2 {
     color: #c62828;
 }
 
+.link-blue {
+    color: #1976d2;
+    text-decoration: none;
+}
+
+.link-blue:hover {
+    text-decoration: underline;
+}
+
 /* 弹窗样式 */
 .modal {
     display: none;
