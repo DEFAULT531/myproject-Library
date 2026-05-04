@@ -48,8 +48,12 @@ class User(db.Model):
     name = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(100), unique=True)
     phone = db.Column(db.String(20))
+    password_hash = db.Column(db.String(200))
     is_delete = db.Column(db.String(1), default='N')
     balance = db.Column(db.Float, default=0)  # 充值余额
+    reader_type = db.Column(db.String(50), default='普通会员')  # 读者类型: 普通会员/高级会员/学生/教师
+    status = db.Column(db.String(20), default='正常')  # 读者状态: 正常/挂失/注销
+    max_borrow = db.Column(db.Integer, default=5)  # 最大借阅数量
 
     borrows = db.relationship('Borrow', backref='user', lazy=True)
 
@@ -139,6 +143,31 @@ def init_db():
             cursor.execute("SHOW COLUMNS FROM users LIKE 'balance'")
             if not cursor.fetchone():
                 cursor.execute("ALTER TABLE users ADD COLUMN balance FLOAT DEFAULT 0")
+
+            # 添加password_hash字段
+            cursor.execute("SHOW COLUMNS FROM users LIKE 'password_hash'")
+            if not cursor.fetchone():
+                cursor.execute("ALTER TABLE users ADD COLUMN password_hash VARCHAR(200)")
+
+            # 添加reader_type字段
+            cursor.execute("SHOW COLUMNS FROM users LIKE 'reader_type'")
+            if not cursor.fetchone():
+                cursor.execute("ALTER TABLE users ADD COLUMN reader_type VARCHAR(50) DEFAULT '普通会员'")
+
+            # 添加status字段
+            cursor.execute("SHOW COLUMNS FROM users LIKE 'status'")
+            if not cursor.fetchone():
+                cursor.execute("ALTER TABLE users ADD COLUMN status VARCHAR(20) DEFAULT '正常'")
+
+            # 添加max_borrow字段
+            cursor.execute("SHOW COLUMNS FROM users LIKE 'max_borrow'")
+            if not cursor.fetchone():
+                cursor.execute("ALTER TABLE users ADD COLUMN max_borrow INT DEFAULT 5")
+
+            # 兼容已有数据
+            cursor.execute("UPDATE users SET reader_type='普通会员' WHERE reader_type IS NULL")
+            cursor.execute("UPDATE users SET status='正常' WHERE status IS NULL")
+            cursor.execute("UPDATE users SET max_borrow=5 WHERE max_borrow IS NULL")
 
             cursor.execute("SHOW COLUMNS FROM borrows LIKE 'is_delete'")
             if not cursor.fetchone():
@@ -302,14 +331,26 @@ def users():
     return render_template('user.html', users=users)
 
 
+@app.route('/readers')
+@login_required
+def readers():
+    return redirect(url_for('users'))
+
+
 @app.route('/user/add', methods=['POST'])
 @login_required
 def add_user():
     name = request.form.get('name')
     email = request.form.get('email')
     phone = request.form.get('phone')
+    password = request.form.get('password')
+    reader_type = request.form.get('reader_type', '普通会员')
+    status = request.form.get('status', '正常')
+    max_borrow = request.form.get('max_borrow', type=int, default=5)
 
-    user = User(name=name, email=email, phone=phone)
+    password_hash = generate_password_hash(password) if password else None
+    user = User(name=name, email=email, phone=phone, password_hash=password_hash,
+                reader_type=reader_type, status=status, max_borrow=max_borrow)
     db.session.add(user)
     db.session.commit()
     return redirect(url_for('users'))
@@ -322,6 +363,11 @@ def edit_user(id):
     user.name = request.form.get('name')
     user.email = request.form.get('email')
     user.phone = request.form.get('phone')
+    user.reader_type = request.form.get('reader_type', '普通会员')
+    user.max_borrow = request.form.get('max_borrow', type=int, default=5)
+    password = request.form.get('password')
+    if password:
+        user.password_hash = generate_password_hash(password)
     db.session.commit()
     return redirect(url_for('users'))
 
@@ -347,6 +393,34 @@ def recharge(id):
     return redirect(url_for('users'))
 
 
+# 读者状态管理
+@app.route('/user/report_loss/<int:id>')
+@login_required
+def report_loss(id):
+    user = User.query.get_or_404(id)
+    user.status = '挂失'
+    db.session.commit()
+    return redirect(url_for('users'))
+
+
+@app.route('/user/cancel/<int:id>')
+@login_required
+def cancel_user(id):
+    user = User.query.get_or_404(id)
+    user.status = '注销'
+    db.session.commit()
+    return redirect(url_for('users'))
+
+
+@app.route('/user/restore/<int:id>')
+@login_required
+def restore_user(id):
+    user = User.query.get_or_404(id)
+    user.status = '正常'
+    db.session.commit()
+    return redirect(url_for('users'))
+
+
 # 借阅管理
 @app.route('/borrows')
 @login_required
@@ -361,6 +435,24 @@ def add_borrow():
     book_id = request.form.get('book_id', type=int)
     user_id = request.form.get('user_id', type=int)
     return_date = request.form.get('return_date')
+
+    # 校验读者状态和借阅额度
+    reader = User.query.filter_by(id=user_id, is_delete='N').first()
+    error = None
+    if not reader:
+        error = '读者不存在'
+    elif reader.status != '正常':
+        error = f'读者状态为"{reader.status}"，无法借阅'
+    else:
+        active_count = Borrow.query.filter_by(
+            user_id=user_id, status='借阅中', is_delete='N'
+        ).count()
+        if active_count >= reader.max_borrow:
+            error = f'该读者已达到最大借阅数量（{reader.max_borrow}本），无法继续借阅'
+
+    if error:
+        borrows = Borrow.query.filter_by(is_delete='N').order_by(Borrow.borrow_date.desc()).all()
+        return render_template('borrow.html', borrows=borrows, error=error)
 
     # 检查库存
     book = Book.query.get(book_id)
@@ -412,9 +504,10 @@ def api_books():
 
 @app.route('/api/users')
 def api_users():
-    users = User.query.filter_by(is_delete='N').all()
+    users = User.query.filter_by(is_delete='N', status='正常').all()
     return jsonify([{
-        'id': u.id, 'name': u.name, 'email': u.email, 'phone': u.phone
+        'id': u.id, 'name': u.name, 'email': u.email, 'phone': u.phone,
+        'status': u.status, 'reader_type': u.reader_type
     } for u in users])
 
 

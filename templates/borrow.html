@@ -21,6 +21,7 @@
             <a href="{{ url_for('index') }}">首页</a>
             <a href="{{ url_for('books') }}">图书管理</a>
             <a href="{{ url_for('borrows') }}" class="active">借阅管理</a>
+            <a href="{{ url_for('readers') }}">读者管理</a>
             <div class="nav-group">
                 <a href="{{ url_for('organizations') }}">系统管理</a>
                 <a href="{{ url_for('organizations') }}">　├ 组织管理</a>
@@ -32,6 +33,10 @@
 
     <div class="container">
         <h1>借阅管理</h1>
+
+        {% if error %}
+        <div class="alert alert-error" id="error-alert">{{ error }}</div>
+        {% endif %}
 
         <div class="toolbar">
             <button class="btn btn-primary" onclick="showModal('borrow-modal')">借书</button>
@@ -66,7 +71,7 @@
                     </td>
                     <td>
                         {% if borrow.status == '借阅中' %}
-                        <a href="{{ url_for('return_book', id=borrow.id) }}" class="btn btn-sm" onclick="confirmDelete('{{ url_for('return_book', id=borrow.id) }}'); return false;">还书</a>
+                        <a href="{{ url_for('return_book', id=borrow.id) }}" class="btn btn-sm" onclick="confirmDelete('{{ url_for('return_book', id=borrow.id) }}', '是否确认还书？', '还书成功'); return false;">还书</a>
                         {% endif %}
                         <a href="{{ url_for('delete_borrow', id=borrow.id) }}" class="btn btn-sm btn-danger" onclick="confirmDelete('{{ url_for('delete_borrow', id=borrow.id) }}'); return false;">删除</a>
                     </td>
@@ -105,6 +110,12 @@
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>
     <script>
+        // 自动隐藏错误提示
+        setTimeout(function() {
+            var el = document.getElementById('error-alert');
+            if (el) { el.style.display = 'none'; }
+        }, 5000);
+
         // 加载可借图书和用户
         fetch('/api/books')
             .then(res => res.json())

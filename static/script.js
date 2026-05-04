@@ -15,7 +15,7 @@ window.onclick = function(event) {
 }
 
 // 删除确认弹窗（自定义样式）
-function confirmDelete(url) {
+function confirmDelete(url, message, successMessage) {
     const confirmModal = document.createElement('div');
     confirmModal.style.cssText = `
         position: fixed;
@@ -29,9 +29,10 @@ function confirmDelete(url) {
         align-items: center;
         z-index: 2000;
     `;
+    const msg = message || '是否确认删除？';
     confirmModal.innerHTML = `
         <div style="background: white; padding: 2rem; border-radius: 8px; text-align: center; min-width: 300px;">
-            <p style="margin-bottom: 1.5rem; font-size: 1.1rem; color: #4e342e;">是否确认删除？</p>
+            <p style="margin-bottom: 1.5rem; font-size: 1.1rem; color: #4e342e;">${msg}</p>
             <div style="display: flex; gap: 1rem; justify-content: center;">
                 <button class="btn btn-primary" id="confirm-yes">确认</button>
                 <button class="btn" id="confirm-no">取消</button>
@@ -42,14 +43,14 @@ function confirmDelete(url) {
 
     document.getElementById('confirm-yes').onclick = function() {
         confirmModal.remove();
-        // 发起删除请求
+        // 发起请求
         fetch(url, { method: 'GET' })
             .then(response => {
-                showToast('删除成功');
+                showToast(successMessage || '操作成功');
                 setTimeout(() => window.location.reload(), 1000);
             })
             .catch(() => {
-                showToast('删除成功');
+                showToast(successMessage || '操作成功');
                 setTimeout(() => window.location.reload(), 1000);
             });
     };
@@ -92,10 +93,12 @@ function editBook(id, title, author, isbn, category, stock) {
 }
 
 // 编辑用户
-function editUser(id, name, email, phone) {
+function editUser(id, name, email, phone, reader_type, max_borrow) {
     document.getElementById('edit-name').value = name;
     document.getElementById('edit-email').value = email || '';
     document.getElementById('edit-phone').value = phone || '';
+    document.getElementById('edit-reader_type').value = reader_type || '普通会员';
+    document.getElementById('edit-max_borrow').value = max_borrow || 5;
 
     document.getElementById('edit-user-form').action = '/user/edit/' + id;
     showModal('edit-user-modal');
