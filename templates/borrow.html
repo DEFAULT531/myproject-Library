@@ -50,6 +50,7 @@
                     <th>借阅人</th>
                     <th>借阅日期</th>
                     <th>应还日期</th>
+                    <th>实还日期</th>
                     <th>状态</th>
                     <th>操作</th>
                 </tr>
@@ -62,6 +63,7 @@
                     <td>{{ borrow.user.name }}</td>
                     <td>{{ borrow.borrow_date }}</td>
                     <td>{{ borrow.return_date or '-' }}</td>
+                    <td>{{ borrow.actual_return_date or '-' }}</td>
                     <td>
                         {% if borrow.status == '借阅中' %}
                         <span class="badge warning">借阅中</span>

@@ -7,6 +7,38 @@ from datetime import datetime, timedelta
 import os
 import time
 import pymysql
+
+# 雪花ID生成器
+class Snowflake:
+    def __init__(self, worker_id=1, datacenter_id=1, sequence=0):
+        self.worker_id = worker_id
+        self.datacenter_id = datacenter_id
+        self.sequence = sequence
+        self.last_timestamp = 0
+
+    def _timestamp(self):
+        return int(time.time() * 1000)
+
+    def next_id(self):
+        timestamp = self._timestamp()
+        if timestamp < self.last_timestamp:
+            raise Exception("Clock moved backwards")
+        if timestamp == self.last_timestamp:
+            self.sequence = (self.sequence + 1) & 0xfff
+            if self.sequence == 0:
+                timestamp = self._wait_next_timestamp()
+        else:
+            self.sequence = 0
+        self.last_timestamp = timestamp
+        return ((timestamp - 1288834974657) << 22) | (self.datacenter_id << 17) | (self.worker_id << 12) | self.sequence
+
+    def _wait_next_timestamp(self):
+        while self._timestamp() <= self.last_timestamp:
+            pass
+        return self._timestamp()
+
+snowflake = Snowflake(worker_id=1, datacenter_id=1)
+
 app = Flask(__name__)
 
 # MySQL 配置 (密码: 123456)
@@ -30,7 +62,7 @@ login_manager.login_view = 'login'
 # 数据库模型
 class Book(db.Model):
     __tablename__ = 'books'
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.BigInteger, primary_key=True)
     title = db.Column(db.String(200), nullable=False)
     author = db.Column(db.String(100), nullable=False)
     isbn = db.Column(db.String(20), unique=True)
@@ -44,7 +76,7 @@ class Book(db.Model):
 
 class User(db.Model):
     __tablename__ = 'users'
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.BigInteger, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     email = db.Column(db.String(100), unique=True)
     phone = db.Column(db.String(20))
@@ -60,18 +92,19 @@ class User(db.Model):
 
 class Borrow(db.Model):
     __tablename__ = 'borrows'
-    id = db.Column(db.Integer, primary_key=True)
-    book_id = db.Column(db.Integer, db.ForeignKey('books.id'), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    id = db.Column(db.BigInteger, primary_key=True)
+    book_id = db.Column(db.BigInteger, db.ForeignKey('books.id'), nullable=False)
+    user_id = db.Column(db.BigInteger, db.ForeignKey('users.id'), nullable=False)
     borrow_date = db.Column(db.Date, default=datetime.now().date)
     return_date = db.Column(db.Date)
+    actual_return_date = db.Column(db.Date)
     status = db.Column(db.String(20), default='借阅中')
     is_delete = db.Column(db.String(1), default='N')
 
 
 class Admin(UserMixin, db.Model):
     __tablename__ = 'admins'
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.BigInteger, primary_key=True)
     username = db.Column(db.String(100), unique=True, nullable=False)
     password_hash = db.Column(db.String(200), nullable=False)
     balance = db.Column(db.Float, default=0)  # 模拟会员余额，用于演示
@@ -80,10 +113,10 @@ class Admin(UserMixin, db.Model):
 # 组织管理
 class Organization(db.Model):
     __tablename__ = 'organizations'
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.BigInteger, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     code = db.Column(db.String(50), unique=True)
-    parent_id = db.Column(db.Integer, db.ForeignKey('organizations.id'))
+    parent_id = db.Column(db.BigInteger, db.ForeignKey('organizations.id'))
     description = db.Column(db.String(500))
     status = db.Column(db.Integer, default=1)
     created_at = db.Column(db.DateTime, default=datetime.now)
@@ -95,11 +128,11 @@ class Organization(db.Model):
 # 菜单管理
 class Menu(db.Model):
     __tablename__ = 'menus'
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.BigInteger, primary_key=True)
     name = db.Column(db.String(50), nullable=False)
     icon = db.Column(db.String(50))
     url = db.Column(db.String(200))
-    parent_id = db.Column(db.Integer, db.ForeignKey('menus.id'))
+    parent_id = db.Column(db.BigInteger, db.ForeignKey('menus.id'))
     sort_order = db.Column(db.Integer, default=0)
     status = db.Column(db.Integer, default=1)
     created_at = db.Column(db.DateTime, default=datetime.now)
@@ -201,6 +234,7 @@ def init_db():
         # 创建默认管理员
         if not Admin.query.filter_by(username='admin').first():
             admin = Admin(
+                id=snowflake.next_id(),
                 username='admin',
                 password_hash=generate_password_hash('admin123')
             )
@@ -244,7 +278,7 @@ def add_book():
     if existing:
         return render_template('book.html', books=Book.query.filter_by(is_delete='N').all(), error='书名+作者+分类组合已存在，不能重复')
 
-    book = Book(title=title, author=author, isbn=isbn, category=category, stock=stock)
+    book = Book(id=snowflake.next_id(), title=title, author=author, isbn=isbn, category=category, stock=stock)
     db.session.add(book)
     db.session.commit()
     return redirect(url_for('books'))
@@ -349,7 +383,7 @@ def add_user():
     max_borrow = request.form.get('max_borrow', type=int, default=5)
 
     password_hash = generate_password_hash(password) if password else None
-    user = User(name=name, email=email, phone=phone, password_hash=password_hash,
+    user = User(id=snowflake.next_id(), name=name, email=email, phone=phone, password_hash=password_hash,
                 reader_type=reader_type, status=status, max_borrow=max_borrow)
     db.session.add(user)
     db.session.commit()
@@ -458,7 +492,7 @@ def add_borrow():
     book = Book.query.get(book_id)
     if book and book.stock > 0:
         book.stock -= 1
-        borrow = Borrow(book_id=book_id, user_id=user_id, return_date=return_date, status='借阅中')
+        borrow = Borrow(id=snowflake.next_id(), book_id=book_id, user_id=user_id, return_date=return_date, status='借阅中')
         db.session.add(borrow)
         db.session.commit()
 
@@ -471,6 +505,7 @@ def return_book(id):
     borrow = Borrow.query.get_or_404(id)
     if borrow.status == '借阅中':
         borrow.status = '已归还'
+        borrow.actual_return_date = datetime.now().date()
         book = Book.query.get(borrow.book_id)
         if book:
             book.stock += 1
@@ -530,7 +565,7 @@ def add_organization():
     if not name or not code:
         return redirect(url_for('organizations'))
 
-    org = Organization(name=name, code=code, parent_id=parent_id, description=description)
+    org = Organization(id=snowflake.next_id(), name=name, code=code, parent_id=parent_id, description=description)
     db.session.add(org)
     db.session.commit()
     return redirect(url_for('organizations'))
@@ -577,7 +612,7 @@ def add_menu():
     if not name:
         return redirect(url_for('menus'))
 
-    menu = Menu(name=name, icon=icon, url=url, parent_id=parent_id, sort_order=sort_order)
+    menu = Menu(id=snowflake.next_id(), name=name, icon=icon, url=url, parent_id=parent_id, sort_order=sort_order)
     db.session.add(menu)
     db.session.commit()
     return redirect(url_for('menus'))
