@@ -448,7 +448,8 @@ def recharge(id):
     if amount > 0:
         user.balance = (user.balance or 0) + amount
         db.session.commit()
-    return redirect(url_for('users'))
+        return jsonify({'success': True, 'message': f'充值成功！金额: {amount}元'})
+    return jsonify({'success': False, 'message': '充值失败，请重试'})
 
 
 # 读者状态管理

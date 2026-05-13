@@ -108,6 +108,50 @@ function editUser(id, name, email, phone, reader_type, max_borrow) {
 function showRechargeModal(userId, userName, balance) {
     document.getElementById('recharge-user-name').textContent = userName;
     document.getElementById('recharge-current-balance').textContent = balance;
-    document.getElementById('recharge-form').action = '/user/recharge/' + userId;
+    document.getElementById('recharge-message').style.display = 'none';
+    window.rechargeUserId = userId;
     showModal('recharge-modal');
+}
+
+// 提交充值
+async function submitRecharge() {
+    const userId = window.rechargeUserId;
+    const amount = document.getElementById('recharge-amount').value;
+    const messageEl = document.getElementById('recharge-message');
+
+    if (!amount || amount <= 0) {
+        messageEl.textContent = '请输入有效的充值金额';
+        messageEl.style.display = 'block';
+        messageEl.style.backgroundColor = '#f8d7da';
+        messageEl.style.color = '#721c24';
+        return;
+    }
+
+    try {
+        const response = await fetch('/user/recharge/' + userId, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: 'amount=' + encodeURIComponent(amount)
+        });
+        const result = await response.json();
+
+        if (result.success) {
+            messageEl.textContent = result.message + '，三秒后关闭';
+            messageEl.style.backgroundColor = '#d4edda';
+            messageEl.style.color = '#155724';
+            setTimeout(() => hideModal('recharge-modal'), 3000);
+        } else {
+            messageEl.textContent = result.message + '，三秒后关闭';
+            messageEl.style.backgroundColor = '#f8d7da';
+            messageEl.style.color = '#721c24';
+            setTimeout(() => hideModal('recharge-modal'), 3000);
+        }
+        messageEl.style.display = 'block';
+    } catch (e) {
+        messageEl.textContent = '充值失败，请重试，三秒后关闭';
+        messageEl.style.display = 'block';
+        messageEl.style.backgroundColor = '#f8d7da';
+        messageEl.style.color = '#721c24';
+        setTimeout(() => hideModal('recharge-modal'), 3000);
+    }
 }
