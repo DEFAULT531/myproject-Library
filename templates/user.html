@@ -41,7 +41,7 @@
         <table class="data-table">
             <thead>
                 <tr>
-                    <th>ID</th>
+                    <th class="hidden">ID</th>
                     <th>姓名</th>
                     <th>邮箱</th>
                     <th>电话</th>
@@ -56,7 +56,7 @@
             <tbody>
                 {% for user in users %}
                 <tr>
-                    <td>{{ user.id }}</td>
+                    <td class="hidden">{{user.id }}</td>
                     <td>{{ user.name }}</td>
                     <td>{{ user.email }}</td>
                     <td>{{ user.phone }}</td>
@@ -82,8 +82,9 @@
                         {% endif %}
                     </td>
                     <td>
-                        <button class="btn btn-sm" onclick="editUser({{ user.id }}, '{{ user.name }}', '{{ user.email }}', '{{ user.phone }}', '{{ user.reader_type }}', {{ user.max_borrow or 5 }})">编辑</button>
-                        <button class="btn btn-sm" onclick="showRechargeModal({{ user.id }}, '{{ user.name }}', {{ user.balance or 0 }})">充值</button>
+                        <button class="btn btn-sm" onclick="editUser('{{ user.id }}', '{{ user.name }}', '{{ user.email }}', '{{ user.phone }}', '{{ user.reader_type }}', {{ user.max_borrow or 5 }})">编辑</button>
+                        <button class="btn btn-sm" onclick="showChangePasswordModal('{{ user.id }}', '{{ user.name }}')">改密</button>
+                        <button class="btn btn-sm" onclick="showRechargeModal('{{ user.id }}', '{{ user.name }}', {{ user.balance or 0 }})">充值</button>
                         {% if user.status != '挂失' %}
                         <button class="btn btn-sm" onclick="confirmDelete('{{ url_for('report_loss', id=user.id) }}', '确认将该读者挂失？挂失后将无法借阅。', '已挂失')">挂失</button>
                         {% endif %}
@@ -197,6 +198,54 @@
         </div>
     </div>
 
+    <!-- 修改密码弹窗 -->
+    <div id="change-password-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="hideModal('change-password-modal')">&times;</span>
+            <h2>修改密码 - <span id="cp-user-name"></span></h2>
+            <form id="change-password-form" action="" method="POST">
+                <div class="form-group">
+                    <label>旧密码</label>
+                    <input type="password" name="old_password" id="cp-old-password" required>
+                </div>
+                <div class="form-group">
+                    <label>新密码</label>
+                    <input type="password" name="new_password" id="cp-new-password" required>
+                </div>
+                <div class="form-group">
+                    <label>确认新密码</label>
+                    <input type="password" name="confirm_password" id="cp-confirm-password" required>
+                </div>
+                <button type="submit" class="btn btn-primary">确认修改</button>
+            </form>
+        </div>
+    </div>
+
     <script src="{{ url_for('static', filename='script.js') }}"></script>
+    <script>
+        function showChangePasswordModal(userId, userName) {
+            document.getElementById('cp-user-name').textContent = userName;
+            document.getElementById('change-password-form').action = '/user/password/' + userId;
+            document.getElementById('cp-old-password').value = '';
+            document.getElementById('cp-new-password').value = '';
+            document.getElementById('cp-confirm-password').value = '';
+            showModal('change-password-modal');
+        }
+
+        document.getElementById('change-password-form').addEventListener('submit', function(e) {
+            var newPwd = document.getElementById('cp-new-password').value;
+            var confirmPwd = document.getElementById('cp-confirm-password').value;
+            if (newPwd !== confirmPwd) {
+                alert('新密码与确认新密码不一致');
+                e.preventDefault();
+                return false;
+            }
+            if (newPwd.length < 6) {
+                alert('新密码长度不能少于6位');
+                e.preventDefault();
+                return false;
+            }
+        });
+    </script>
 </body>
 </html>

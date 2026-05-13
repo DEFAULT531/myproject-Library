@@ -3,6 +3,7 @@ import os
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.routing import IntegerConverter
 from datetime import datetime, timedelta
 import os
 import time
@@ -40,6 +41,12 @@ class Snowflake:
 snowflake = Snowflake(worker_id=1, datacenter_id=1)
 
 app = Flask(__name__)
+
+# 自定义BigInteger转换器 (必须在app创建后)
+from werkzeug.routing import IntegerConverter
+class BigIntegerConverter(IntegerConverter):
+    regex = r'\d+'
+app.url_map.converters['bigint'] = BigIntegerConverter
 
 # MySQL 配置 (密码: 123456)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:123456@localhost:3306/library'
@@ -406,6 +413,23 @@ def edit_user(id):
     return redirect(url_for('users'))
 
 
+@app.route('/user/password/<int:id>', methods=['POST'])
+@login_required
+def change_user_password(id):
+    user = User.query.get_or_404(id)
+    old_password = request.form.get('old_password')
+    new_password = request.form.get('new_password')
+
+    # 验证旧密码
+    if user.password_hash and not check_password_hash(user.password_hash, old_password):
+        return render_template('user.html', users=User.query.filter_by(is_delete='N').all(), error='旧密码错误')
+
+    # 设置新密码
+    user.password_hash = generate_password_hash(new_password)
+    db.session.commit()
+    return redirect(url_for('users'))
+
+
 @app.route('/user/delete/<int:id>')
 @login_required
 def delete_user(id):
@@ -416,7 +440,7 @@ def delete_user(id):
 
 
 # 用户充值
-@app.route('/user/recharge/<int:id>', methods=['POST'])
+@app.route('/user/recharge/<string:id>', methods=['POST'])
 @login_required
 def recharge(id):
     user = User.query.get_or_404(id)
